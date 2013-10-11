@@ -237,7 +237,6 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
 	//matcher.match(objectDescriptors, imageDescriptors, matches);
 
-	cout << key1->size() << endl;
 
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
@@ -270,14 +269,11 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	cout << "min dist :" << min_dist << endl;
 
-
-
 	//  対応点間の移動距離による良いマッチングの取捨選択
 	matches->clear();
 	pt1->clear();
 	pt2->clear();
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
-		cout << i << endl;
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
@@ -302,10 +298,13 @@ int main(int argc, char** argv) {
 	//ここからフレーム合成プログラム
 
 	VideoCapture frame_cap;
-	Mat panorama, aim_frame;
+	VideoCapture pano_cap;
+	FileStorage cvfs("log.xml", CV_STORAGE_READ);
+
+	Mat panorama, aim_frame, near_frame;
 	Mat homography;
 	unsigned long n_aim_frame = 5;
-	string str_pano, str_frame;
+	string str_pano, str_frame, str_video;
 	Mat transform_image; // 画像単体での変換結果
 	Mat transform_image2 = Mat(Size(PANO_W, PANO_H), CV_8UC3);
 
@@ -316,6 +315,8 @@ int main(int argc, char** argv) {
 	Mat mask2;
 
 	vector<Point2f> pt1, pt2;
+	//	fstream fs(cam_data.txt);
+	//	fs >> str_video;
 
 	// 対応点の対の格納先
 	std::vector<cv::DMatch> matches; // matcherにより求めたおおまかな対を格納
@@ -335,14 +336,15 @@ int main(int argc, char** argv) {
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
 	}
-	if (argc != 3) {
+	if (argc != 4) {
 		cout << "Usage : " << argv[0] << " frame_video_path "
-				<< "panorama image path" << endl;
+				<< "panorama image path" << "panorama src video path" << endl;
 		return -1;
 	}
 
 	str_frame = argv[1];
 	str_pano = argv[2];
+	string str_pano_video = argv[3];
 	// パノラマ画像の読み込み
 	panorama = imread(str_pano);
 	if (panorama.empty()) {
@@ -355,6 +357,13 @@ int main(int argc, char** argv) {
 		cerr << "cannnot open frame movie" << endl;
 		return -1;
 	}
+
+	pano_cap.open(str_pano_video);
+	if (!pano_cap.isOpened()) {
+		cerr << "cannnot open panorama src movie" << endl;
+		return -1;
+	}
+
 	mask = imread("mask.jpg", CV_LOAD_IMAGE_GRAYSCALE); //パノラママスク画像の読み込み
 
 	// 合成したいフレームを取り出す
@@ -366,12 +375,26 @@ int main(int argc, char** argv) {
 	namedWindow("panorama", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("panorama", panorama);
 	waitKey(30);
+	Mat A1Matrix, A2Matrix;
+	Mat yaw = Mat::eye(3, 3, CV_64FC1);;
+	Mat hh;
+	A1Matrix = Mat::eye(3, 3, CV_64FC1);
+	A1Matrix.at<double> (0, 0) = 900;
+	A1Matrix.at<double> (1, 1) = 900;
+	A1Matrix.at<double> (0, 2) = PANO_W / 2;
+	A1Matrix.at<double> (1, 2) = PANO_H / 2;
+	cout << "a" << endl;
+	SetYawRotationMatrix(&yaw,-10);
+	A2Matrix = A1Matrix.clone();
+	A1Matrix = A1Matrix.inv();
+	hh = A2Matrix * yaw * A1Matrix;
+	cout << hh << endl;
+	//transform_image2 = panorama.clone();
 
-	transform_image2 = panorama.clone();
-
-	//	warpPerspective(panorama, transform_image2, Mat::eye( 3,3,CV_32FC1), Size(PANO_W, PANO_H)); // 先頭フレームをパノラマ平面へ投影
+	warpPerspective(panorama, transform_image2, hh, Size(PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS); // 先頭フレームをパノラマ平面へ投影
 	//	make_pano(panorama, transform_image2, mask, Mat(Size(PANO_W, PANO_H), CV_8UC3, Scalar::all(255)));
-
+	imshow("panorama", transform_image2);
+	waitKey(30);
 	// パノラマ画像と合成したいフレームの特徴点抽出と記述
 	cout << "calc features" << endl;
 	cvtColor(aim_frame, gray_img1, CV_RGB2GRAY);
@@ -391,24 +414,21 @@ int main(int argc, char** argv) {
 	//mask = Mat(Size(PANO_W, PANO_H),CV_8UC3,Scalar::all(0));
 
 	cout << "make drawmathces image" << endl;
-	drawMatches(aim_frame, imageKeypoints, panorama, objectKeypoints, matches,
-			result);
-	resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
+	/*	drawMatches(aim_frame, imageKeypoints, panorama, objectKeypoints, matches,
+	 result);
+	 resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
 
-	cout << "show matches" << endl;
-	namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-	imshow("matches", result);
-	waitKey(30);
-
+	 cout << "show matches" << endl;
+	 namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	 imshow("matches", result);
+	 waitKey(30);
+	 */
 	//ホモグラフィ行列を計算
 	homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
 
 	//合成したいフレームをパノラマ画像に乗るように投影
 	warpPerspective(aim_frame, transform_image, homography,
 			Size(PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
-	namedWindow("transform_image", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-	imshow("transform_image", transform_image);
-	waitKey(30);
 
 	//投影場所のマスク生成
 	warpPerspective(white_img, pano_black, homography, Size(PANO_W, PANO_H),
@@ -416,26 +436,110 @@ int main(int argc, char** argv) {
 	namedWindow("panoblack", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	//waitKey(0);
 
-	//投影先での対応点を再計算
-	bitwise_and(mask, pano_black, mask);
-	erode(mask, mask2, cv::Mat(), cv::Point(-1, -1), 30);
-	feature->operator ()(gray_img2, mask2, objectKeypoints, objectDescriptors);
+	FileNode node(cvfs.fs, NULL); // Get Top Node
+
+	int frame_num;
+	Mat h_base;
+	Mat tmp_base;
+	stringstream ss;
+	long n = 1;
+	Mat aria1, aria2;
+	Mat v1, v2;
+	long max = LONG_MIN;
+	long detect_frame_num;
+	aria1 = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0));
+	aria2 = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0));
+	while (1) {
+		//		frame_num = node["frame"];
+		for (; n < frame_cap.get(CV_CAP_PROP_FRAME_COUNT); n++) {
+			ss << "homo_" << n;
+			read(node[ss.str()], tmp_base);
+			if (!tmp_base.empty())
+				break;
+			ss.clear();
+			ss.str("");
+			cout << n << endl;
+		}
+		cout << "a" << endl;
+		//ここに来たときtmp_baseに取得した行列，nにフレーム番号が格納されている
+		// tmp_baseが空なら取り出し終わっているので下でブレイク処理に入る
+
+
+		if (tmp_base.empty())
+			break;
+		warpPerspective(white_img, aria1, homography, Size(PANO_W, PANO_H),
+				CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+
+		warpPerspective(white_img, aria2, tmp_base, Size(PANO_W, PANO_H),
+				CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+		bitwise_and(aria1, aria2, aria1);
+		namedWindow("mask", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+		imshow("mask", aria1);
+
+		threshold(aria1, aria2, 128, 1, THRESH_BINARY);
+
+		long sum;
+		sum = 0;
+		for (unsigned long i = 0; i < aria2.rows * aria2.cols; i++)
+			sum += aria2.data[i];
+		if (sum > max) {
+			max = sum;
+			h_base = tmp_base.clone();
+			detect_frame_num = n;
+		}
+		sum = 0;
+
+	}
+	cout << "detected near frame : " << detect_frame_num << endl;
+	cout << max << endl;
+	//　重なりが大きいフレームを取り出す
+	pano_cap.set(CV_CAP_PROP_POS_FRAMES, detect_frame_num);
+	pano_cap >> near_frame;
+	cvtColor(near_frame, gray_img2, CV_RGB2GRAY);
+	feature->operator ()(gray_img2, Mat(), objectKeypoints, objectDescriptors);
 	good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
 			&objectKeypoints, &matches, &pt1, &pt2);
-	homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
-	warpPerspective(white_img, pano_black, homography, Size(PANO_W, PANO_H),
-			CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
-	drawMatches(aim_frame, imageKeypoints, panorama, objectKeypoints, matches,
-			result);
+	drawMatches(aim_frame, imageKeypoints, near_frame, objectKeypoints,
+			matches, result);
 	resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
 
 	cout << "show matches" << endl;
 	namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("matches", result);
 	waitKey(30);
+	homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
+	warpPerspective(white_img, pano_black, h_base * homography, Size(PANO_W,
+			PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+	warpPerspective(aim_frame, transform_image, h_base * homography, Size(
+			PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+
+	namedWindow("transform_image", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	imshow("transform_image", transform_image);
+	waitKey(30);
+
+	/*
+	 //投影先での対応点を再計算
+	 bitwise_and(mask, pano_black, mask);
+	 erode(mask, mask2, cv::Mat(), cv::Point(-1, -1), 30);
+	 feature->operator ()(gray_img2, mask2, objectKeypoints, objectDescriptors);
+	 good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
+	 &objectKeypoints, &matches, &pt1, &pt2);
+	 homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
+	 warpPerspective(white_img, pano_black, homography, Size(PANO_W, PANO_H),
+	 CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+	 drawMatches(aim_frame, imageKeypoints, panorama, objectKeypoints, matches,
+	 result);
+	 resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
+
+	 cout << "show matches" << endl;
+	 namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	 imshow("matches", result);
+	 waitKey(30);
+	 */
+
 
 	bitwise_and(mask, pano_black, mask);
-	imshow("panoblack", mask);
+	imshow("panoblack", transform_image2);
 	waitKey(30);
 
 	make_pano(transform_image, transform_image2, ~mask, pano_black);
