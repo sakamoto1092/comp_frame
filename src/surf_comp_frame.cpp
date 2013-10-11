@@ -270,6 +270,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	cout << "min dist :" << min_dist << endl;
 
+
+
 	//  対応点間の移動距離による良いマッチングの取捨選択
 	matches->clear();
 	pt1->clear();

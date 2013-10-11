@@ -7,7 +7,7 @@
 
 #include "3dms-func.h"
 
-// £±¤Ä¤Î¥»¥ó¥µ¥Ç¡¼¥¿¤òÉ½¼¨¡¥¸½ºß¤Ï»þ¹ï¤È¦Á, ¦Â, ¦Ã, ¦Á-north ¤òÉ½¼¨
+// ï¿½ï¿½ï¿½Ä¤Î¥ï¿½ï¿½ó¥µ¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¤Ï»ï¿½ï¿½ï¿½È¦ï¿½, ï¿½ï¿½, ï¿½ï¿½, ï¿½ï¿½-north ï¿½ï¿½É½ï¿½ï¿½
 int DispSensorData(SENSOR_DATA sd)
 {
     fprintf(stderr, "%f %f %f %f ",
@@ -17,7 +17,7 @@ int DispSensorData(SENSOR_DATA sd)
     return 0;
 }
 
-/* flash.dat ¤ÎÆÉ¤ß¹þ¤ß */
+/* flash.dat ï¿½ï¿½ï¿½É¤ß¹ï¿½ï¿½ï¿½ */
 int LoadSensorData(char *oridatafile,SENSOR_DATA *sd_array[])
 { 
     FILE *fp_ori;
@@ -34,16 +34,16 @@ int LoadSensorData(char *oridatafile,SENSOR_DATA *sd_array[])
         exit(0);
     }
    
-    //fgets( cdum, 1024, fp); // £³¹ÔÆÉ¤ßÈô¤Ð¤¹
-    //fgets( cdum, 1024, fp); // £³¹ÔÆÉ¤ßÈô¤Ð¤¹
-    //fgets( cdum, 1024, fp); // £³¹ÔÆÉ¤ßÈô¤Ð¤¹
+    //fgets( cdum, 1024, fp); // ï¿½ï¿½ï¿½ï¿½ï¿½É¤ï¿½ï¿½ï¿½ï¿½Ð¤ï¿½
+    //fgets( cdum, 1024, fp); // ï¿½ï¿½ï¿½ï¿½ï¿½É¤ï¿½ï¿½ï¿½ï¿½Ð¤ï¿½
+    //fgets( cdum, 1024, fp); // ï¿½ï¿½ï¿½ï¿½ï¿½É¤ï¿½ï¿½ï¿½ï¿½Ð¤ï¿½
     
     p = sd_array[0];
     for (i=0; i< MAXDATA_3DMS; i++) {
         fscanf( fp_ori, "%lf,%lf,%lf,%lf",
                 &t1,&(p->alpha), &(p->beta), &(p->gamma));
         p->north=p->alpha;;
-        p->TT = t1/1000; // ÀäÂÐ»þ¹ï(ÉÃ)¤Î»»½Ð
+        p->TT = t1/1000; // ï¿½ï¿½ï¿½Ð»ï¿½ï¿½ï¿½(ï¿½ï¿½)ï¿½Î»ï¿½ï¿½ï¿½
         p++;
     }  
     fclose(fp_ori);
@@ -51,10 +51,10 @@ int LoadSensorData(char *oridatafile,SENSOR_DATA *sd_array[])
     return 0;
 }
 
-// ¥»¥ó¥µ¥Ç¡¼¥¿¤òÊä´Ö¤·¤Æ»þ¹ï¤Î¥Ñ¥é¥á¡¼¥¿¤ò»»½Ð¤¹¤ë
-int GetSensorDataForTime(double TT,  // »þ¹ï¾ðÊó
-                         SENSOR_DATA *in_sd_array[], // ÆþÎÏ¥Ç¡¼¥¿(ÇÛÎó)
-                         SENSOR_DATA *out_sd         // ½ÐÎÏ¥Ç¡¼¥¿(£±¸ÄÊ¬)
+// ï¿½ï¿½ï¿½ó¥µ¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½Æ»ï¿½ï¿½ï¿½Î¥Ñ¥ï¿½á¡¼ï¿½ï¿½ï¿½ò»»½Ð¤ï¿½ï¿½ï¿½
+int GetSensorDataForTime(double TT,  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+                         SENSOR_DATA *in_sd_array[], // ï¿½ï¿½ï¿½Ï¥Ç¡ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½)
+                         SENSOR_DATA *out_sd         // ï¿½ï¿½ï¿½Ï¥Ç¡ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½Ê¬)
                          )
 {
     int i=0;

@@ -14,12 +14,12 @@ typedef struct{
     double TT;
 }SENSOR_DATA;
 
-// £±¤Ä¤Î¥»¥ó¥µ¥Ç¡¼¥¿¤òÉ½¼¨¡¥¸½ºß¤Ï»þ¹ï¤È¦Á, ¦Â, ¦Ã, ¦Á-north ¤òÉ½¼¨
+// ï¿½ï¿½ï¿½Ä¤Î¥ï¿½ï¿½ó¥µ¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½É½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¤Ï»ï¿½ï¿½ï¿½È¦ï¿½, ï¿½ï¿½, ï¿½ï¿½, ï¿½ï¿½-north ï¿½ï¿½É½ï¿½ï¿½
 int DispSensorData(SENSOR_DATA sd);
 
-// ¥»¥ó¥µ¥Ç¡¼¥¿¥Õ¥¡¥¤¥ë¤«¤é¤ÎÆÉ¤ß¹þ¤ß
+// ï¿½ï¿½ï¿½ó¥µ¥Ç¡ï¿½ï¿½ï¿½ï¿½Õ¥ï¿½ï¿½ï¿½ï¿½ë¤«ï¿½ï¿½ï¿½ï¿½É¤ß¹ï¿½ï¿½ï¿½
 int LoadSensorData(char *oridatafile ,SENSOR_DATA *sd_array[]);
 //int LoadSensorData(char *timedatafile,char *accdatafile,char *magdatafile,char *oridatafile , SENSOR_DATA *sd_array[]);
 
-// ¥»¥ó¥µ¥Ç¡¼¥¿¤òÊä´Ö¤·¤Æ»þ¹ï¤Î¥Ñ¥é¥á¡¼¥¿¤ò»»½Ð¤¹¤ë
+// ï¿½ï¿½ï¿½ó¥µ¥Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¤ï¿½ï¿½Æ»ï¿½ï¿½ï¿½Î¥Ñ¥ï¿½á¡¼ï¿½ï¿½ï¿½ò»»½Ð¤ï¿½ï¿½ï¿½
 int GetSensorDataForTime(double TT, SENSOR_DATA *in_sd_array[], SENSOR_DATA *sd);
