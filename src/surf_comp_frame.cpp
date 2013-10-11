@@ -233,7 +233,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	FlannBasedMatcher matcher;
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
-	int knn = 1;
+	int knn = 10;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
 	//matcher.match(objectDescriptors, imageDescriptors, matches);
 
@@ -277,7 +277,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist) * 4) {
+					< (min_dist + 1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 
@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
 
 	Mat panorama, aim_frame, near_frame;
 	Mat homography;
-	unsigned long n_aim_frame = 5;
+	unsigned long n_aim_frame = 500;
 	string str_pano, str_frame, str_video;
 	Mat transform_image; // 画像単体での変換結果
 	Mat transform_image2 = Mat(Size(PANO_W, PANO_H), CV_8UC3);
@@ -331,7 +331,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 100);
+		feature->set("hessianThreshold", 200);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -384,7 +384,7 @@ int main(int argc, char** argv) {
 	A1Matrix.at<double> (0, 2) = PANO_W / 2;
 	A1Matrix.at<double> (1, 2) = PANO_H / 2;
 	cout << "a" << endl;
-	SetYawRotationMatrix(&yaw,-10);
+	SetYawRotationMatrix(&yaw,0);
 	A2Matrix = A1Matrix.clone();
 	A1Matrix = A1Matrix.inv();
 	hh = A2Matrix * yaw * A1Matrix;
@@ -414,15 +414,7 @@ int main(int argc, char** argv) {
 	//mask = Mat(Size(PANO_W, PANO_H),CV_8UC3,Scalar::all(0));
 
 	cout << "make drawmathces image" << endl;
-	/*	drawMatches(aim_frame, imageKeypoints, panorama, objectKeypoints, matches,
-	 result);
-	 resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
 
-	 cout << "show matches" << endl;
-	 namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-	 imshow("matches", result);
-	 waitKey(30);
-	 */
 	//ホモグラフィ行列を計算
 	homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
 
@@ -458,9 +450,8 @@ int main(int argc, char** argv) {
 				break;
 			ss.clear();
 			ss.str("");
-			cout << n << endl;
 		}
-		cout << "a" << endl;
+
 		//ここに来たときtmp_baseに取得した行列，nにフレーム番号が格納されている
 		// tmp_baseが空なら取り出し終わっているので下でブレイク処理に入る
 
