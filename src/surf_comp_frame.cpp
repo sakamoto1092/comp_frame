@@ -277,7 +277,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 1) * 3) {
+					< (min_dist ) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 
@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
 
 	Mat panorama, aim_frame, near_frame;
 	Mat homography;
-	unsigned long n_aim_frame = 500;
+	unsigned long n_aim_frame = 1;
 	string str_pano, str_frame, str_video;
 	Mat transform_image; // 画像単体での変換結果
 	Mat transform_image2 = Mat(Size(PANO_W, PANO_H), CV_8UC3);
@@ -331,20 +331,21 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 200);
+		feature->set("hessianThreshold", 50);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
 	}
-	if (argc != 4) {
-		cout << "Usage : " << argv[0] << " frame_video_path "
-				<< "panorama image path" << "panorama src video path" << endl;
+	if (argc != 5) {
+		cout << "Usage : " << argv[0] << " frame_video_path " << "target_frame_num"
+				<< "panorama_image_path" << "panorama_src_video_path" << endl;
 		return -1;
 	}
 
 	str_frame = argv[1];
-	str_pano = argv[2];
-	string str_pano_video = argv[3];
+	n_aim_frame = atoi(argv[2]);
+	str_pano = argv[3];
+	string str_pano_video = argv[4];
 	// パノラマ画像の読み込み
 	panorama = imread(str_pano);
 	if (panorama.empty()) {
