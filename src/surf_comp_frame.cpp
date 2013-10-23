@@ -277,9 +277,9 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist ) * 3) {
-				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
-				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
+					< (min_dist+0.1) ) {
+						  //&&	fabs(((*key1)[tmp_matches[i].queryIdx]).pt.y - ((*key2)[tmp_matches[i].trainIdx]).pt.y) < 100){
+						/// fabs((*key1)[tmp_matches[i].queryIdx].pt.x - 	(*key2)[tmp_matches[i].trainIdx].pt.x) < 0.1) {
 
 				matches->push_back(tmp_matches[i]);
 				pt1->push_back((*key1)[tmp_matches[i].queryIdx].pt);
@@ -304,6 +304,7 @@ int main(int argc, char** argv) {
 	Mat panorama, aim_frame, near_frame;
 	Mat homography;
 	unsigned long n_aim_frame = 1;
+	long offset_sec;
 	string str_pano, str_frame, str_video;
 	Mat transform_image; // 画像単体での変換結果
 	Mat transform_image2 = Mat(Size(PANO_W, PANO_H), CV_8UC3);
@@ -331,14 +332,14 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 50);
+		feature->set("hessianThreshold", 100);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
 	}
-	if (argc != 5) {
+	if (argc != 6) {
 		cout << "Usage : " << argv[0] << " frame_video_path " << "target_frame_num"
-				<< "panorama_image_path" << "panorama_src_video_path" << endl;
+				<< "panorama_image_path" << "panorama_src_video_path" << "offset_sec" << endl;
 		return -1;
 	}
 
@@ -346,6 +347,9 @@ int main(int argc, char** argv) {
 	n_aim_frame = atoi(argv[2]);
 	str_pano = argv[3];
 	string str_pano_video = argv[4];
+	offset_sec = atoi(argv[5]);
+
+	cout << "load background image" << endl;
 	// パノラマ画像の読み込み
 	panorama = imread(str_pano);
 	if (panorama.empty()) {
@@ -365,13 +369,22 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
+	cout << "load background mask image" << endl;
 	mask = imread("mask.jpg", CV_LOAD_IMAGE_GRAYSCALE); //パノラママスク画像の読み込み
 
+	cout << "load target frame image" << endl;
 	// 合成したいフレームを取り出す
+	n_aim_frame += 30*offset_sec;
 	frame_cap.set(CV_CAP_PROP_POS_FRAMES, n_aim_frame);
+	cout << "load target frame image : " << n_aim_frame << endl;
 	frame_cap >> aim_frame;
+	if(aim_frame.empty()){
+		cerr << "cannnot open target frame" << endl;
+		return -1;
+	}
 	namedWindow("aim", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("aim", aim_frame);
+	imwrite("target.jpg", aim_frame);
 	waitKey(30);
 	namedWindow("panorama", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("panorama", panorama);
