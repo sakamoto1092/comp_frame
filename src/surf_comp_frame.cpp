@@ -11,8 +11,15 @@
 #include <vector>
 #include <fstream>
 #include <boost/program_options.hpp>
+#include "3dms-func.h"
+
+// パノラマ画像の大きさ
 #define PANO_W 6000
 #define PANO_H 3000
+
+// 合成フレームのFPS
+#define TARGET_VIDEO_FPS 30
+
 using namespace std;
 using namespace cv;
 using boost::program_options::options_description;
@@ -277,9 +284,9 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist+0.1) ) {
-						  //&&	fabs(((*key1)[tmp_matches[i].queryIdx]).pt.y - ((*key2)[tmp_matches[i].trainIdx]).pt.y) < 100){
-						/// fabs((*key1)[tmp_matches[i].queryIdx].pt.x - 	(*key2)[tmp_matches[i].trainIdx].pt.x) < 0.1) {
+					< (min_dist +0.1)) {
+				//&&	fabs(((*key1)[tmp_matches[i].queryIdx]).pt.y - ((*key2)[tmp_matches[i].trainIdx]).pt.y) < 100){
+				/// fabs((*key1)[tmp_matches[i].queryIdx].pt.x - 	(*key2)[tmp_matches[i].trainIdx].pt.x) < 0.1) {
 
 				matches->push_back(tmp_matches[i]);
 				pt1->push_back((*key1)[tmp_matches[i].queryIdx].pt);
@@ -297,21 +304,26 @@ int main(int argc, char** argv) {
 
 	//ここからフレーム合成プログラム
 
-	VideoCapture frame_cap;
-	VideoCapture pano_cap;
+	VideoCapture frame_cap; // target frame movie
+	VideoCapture pano_cap; // background frame movie
 	FileStorage cvfs("log.xml", CV_STORAGE_READ);
 
 	Mat panorama, aim_frame, near_frame;
 	Mat homography;
-	unsigned long n_aim_frame = 1;
-	long offset_sec;
-	string str_pano, str_frame, str_video;
+	unsigned long n_aim_frame = 1; // target frame number
+	long offset_sec; // target video offset
+	long s_pano; // panorama frame time
+	long n_pano_start_frame;
+	//	string str_pano, str_frame, str_video;
+	string str_pano_video, str_pano_time, str_pano_ori;
+	string str_aim_video, str_aim_time, str_aim_ori;
+	string str_pano;
 	Mat transform_image; // 画像単体での変換結果
 	Mat transform_image2 = Mat(Size(PANO_W, PANO_H), CV_8UC3);
 
 	Mat mask = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0)); // パノラマ画像のマスク
 	Mat pano_black = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0)); // パノラマ画像と同じサイズの黒画像
-	Mat white_img = Mat(Size(1280, 720), CV_8U, Scalar::all(255)); // フレームと同じサイズの白画像
+	Mat white_img;//= Mat(Size(1280, 720), CV_8U, Scalar::all(255)); // フレームと同じサイズの白画像
 	Mat gray_img1, gray_img2;
 	Mat mask2;
 
@@ -332,83 +344,233 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 100);
+		feature->set("hessianThreshold", 5);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
 	}
-	if (argc != 6) {
-		cout << "Usage : " << argv[0] << " frame_video_path " << "target_frame_num"
-				<< "panorama_image_path" << "panorama_src_video_path" << "offset_sec" << endl;
+	if (argc != 4) {
+		//	cout << "Usage : " << argv[0] << "target_frame_video"
+		//			<< "target_frame_number" << "panorama_image_path"
+		//			<< "panorama_src_video_path" << "offset_sec"
+		//			<< "TIME_file_path" << "target_ORI_FILE_path"
+		//			<< "panorama_frame_start_number" << "panorama_ORI_FILE_path"
+		//			<< endl;
+		cout << "Usage : " << argv[0] << "target_frame_image "
+				<< "panorama_cam_data" << "panorama_background_image_path"
+				<< "target_frame_number" << " offset_sec"
+				<< "panorama_frame_start_number" << endl;
 		return -1;
 	}
 
-	str_frame = argv[1];
-	n_aim_frame = atoi(argv[2]);
-	str_pano = argv[3];
-	string str_pano_video = argv[4];
-	offset_sec = atoi(argv[5]);
+	ifstream ifs_aimcam(argv[1]);
+	ifstream ifs_panocam(argv[2]);
 
-	cout << "load background image" << endl;
-	// パノラマ画像の読み込み
+	if (!ifs_aimcam.is_open()) {
+		cerr << "cannnot open target_cam_data : " << argv[1] << endl;
+		return -1;
+	}
+	if (!ifs_panocam.is_open()) {
+		cerr << "cannnot open panorama_cam_data : " << argv[2] << endl;
+		return -1;
+	}
+
+	// パノラマ背景の元動画，TIMEファイル，ORIファイルのパスを取得
+	ifs_panocam >> str_pano_video;
+	ifs_panocam >> str_pano_time;
+	ifs_panocam >> str_pano_ori;
+
+	// はめ込むフレームを含む動画，TIMEファイル，ORIファイルのパスを取得
+	ifs_aimcam >> str_aim_video;
+	ifs_aimcam >> str_aim_time;
+	ifs_aimcam >> str_aim_ori;
+
+	// パノラマ背景画像のファイル名を取得
+	str_pano = argv[3];
+
+	// はめ込むフレーム画像の大まかなオフセット[sec]offset_secと，そこからの相対フレーム番号n_aim_frame
+	//n_aim_frame = atoi(argv[4]);
+	//offset_sec = atoi(argv[5]);
+
+	// パノラマ背景合成時における初期フレーム番号
+	//n_pano_start_frame = atoi(argv[6]);
+
+
+	// パノラマ背景画像の読み込み
 	panorama = imread(str_pano);
 	if (panorama.empty()) {
 		cerr << "cannot open panorama image" << endl;
 		return -1;
 	}
+	cout << "load background image" << endl;
 
-	frame_cap.open(str_frame);
+	// 合成フレームを含む動画ファイルをオープン
+	/*frame_cap.open(str_aim_video);
 	if (!frame_cap.isOpened()) {
 		cerr << "cannnot open frame movie" << endl;
 		return -1;
 	}
+	*/
+	aim_frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);  // 直接合成フレームを指定する場合argv[1]に画像pathを指定する
 
+	// パノラマ背景の元動画をオープン
 	pano_cap.open(str_pano_video);
 	if (!pano_cap.isOpened()) {
 		cerr << "cannnot open panorama src movie" << endl;
 		return -1;
 	}
 
+	//　パノラママスク画像の読み込み
+	mask = imread("mask.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	cout << "load background mask image" << endl;
-	mask = imread("mask.jpg", CV_LOAD_IMAGE_GRAYSCALE); //パノラママスク画像の読み込み
+
 
 	cout << "load target frame image" << endl;
-	// 合成したいフレームを取り出す
-	n_aim_frame += 30*offset_sec;
-	frame_cap.set(CV_CAP_PROP_POS_FRAMES, n_aim_frame);
-	cout << "load target frame image : " << n_aim_frame << endl;
+/*
+	// 合成フレームの位置時間を計算し，画像を取得
+	double aim_frame_time= (((double)n_aim_frame / (double)TARGET_VIDEO_FPS) + (double)offset_sec) * 1000.0;
+	if(frame_cap.set(CV_CAP_PROP_POS_FRAMES, aim_frame_time)){
+		cout << "Success !!" << endl;
+	}
+	cout << "target frame time : " << aim_frame_time << " [msec]" << endl;
 	frame_cap >> aim_frame;
+*/
 	if(aim_frame.empty()){
+		cerr << "cannnot load target frame"<<endl;
+	}
+
+	//imshow("aim_frame",aim_frame);
+	//waitKey(0);
+
+	pano_cap.set(CV_CAP_PROP_POS_FRAMES, s_pano);
+	double pano_frame_time = pano_cap.get(CV_CAP_PROP_POS_MSEC);
+
+	//cout << "aim_frame_time : " << aim_frame_time << endl;
+	//cout << "pano_frame_time : " << pano_frame_time << endl;
+
+	//cout << "load target frame image : " << n_aim_frame << endl;
+
+
+	if (aim_frame.empty()) {
 		cerr << "cannnot open target frame" << endl;
 		return -1;
 	}
+	// create white_img
+	white_img = Mat(aim_frame.size(), CV_8U, Scalar::all(255));
+
 	namedWindow("aim", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("aim", aim_frame);
-	imwrite("target.jpg", aim_frame);
+	//imwrite("target.jpg", aim_frame);
 	waitKey(30);
 	namedWindow("panorama", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("panorama", panorama);
 	waitKey(30);
 	Mat A1Matrix, A2Matrix;
-	Mat yaw = Mat::eye(3, 3, CV_64FC1);;
-	Mat hh;
+	Mat yaw = Mat::eye(3, 3, CV_64FC1);
+	Mat roll = cv::Mat::eye(3, 3, CV_64FC1);
+	Mat pitch = cv::Mat::eye(3, 3, CV_64FC1);
+
+	Mat hh = Mat::eye(3, 3, CV_64FC1);
 	A1Matrix = Mat::eye(3, 3, CV_64FC1);
+
 	A1Matrix.at<double> (0, 0) = 900;
 	A1Matrix.at<double> (1, 1) = 900;
 	A1Matrix.at<double> (0, 2) = PANO_W / 2;
 	A1Matrix.at<double> (1, 2) = PANO_H / 2;
 	cout << "a" << endl;
-	SetYawRotationMatrix(&yaw,0);
+	SetYawRotationMatrix(&yaw, 0);
 	A2Matrix = A1Matrix.clone();
 	A1Matrix = A1Matrix.inv();
-	hh = A2Matrix * yaw * A1Matrix;
+	//hh = A2Matrix * yaw * A1Matrix;
 	cout << hh << endl;
 	//transform_image2 = panorama.clone();
 
-	warpPerspective(panorama, transform_image2, hh, Size(PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS); // 先頭フレームをパノラマ平面へ投影
+	warpPerspective(panorama, transform_image2, hh, Size(PANO_W, PANO_H),
+			CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS); // 先頭フレームをパノラマ平面へ投影
 	//	make_pano(panorama, transform_image2, mask, Mat(Size(PANO_W, PANO_H), CV_8UC3, Scalar::all(255)));
 	imshow("panorama", transform_image2);
 	waitKey(30);
+
+	// 合成したいフレームのORIからパノラマ平面へのホモグラフィを計算し重なり具合を計算
+	/*string str_time(argv[6]);
+	string time_buf;
+	ifstream ifs_time(str_time.c_str());
+	double s_time;
+
+	if (!ifs_time.is_open()) {
+		cerr << "cannnot open TIME file : " << str_time << endl;
+		return -1;
+	}
+
+	ifs_time >> time_buf;
+	ifs_time >> time_buf;
+	ifs_time >> time_buf;
+	ifs_time >> s_time; // msec
+
+	s_time /= 1000.0;
+	cout << "s_time : " << s_time << endl;
+	SENSOR_DATA *sensor = (SENSOR_DATA *) malloc(sizeof(SENSOR_DATA) * 5000);
+
+	// 対象フレームのセンサデータを一括読み込み
+	LoadSensorData(argv[7], &sensor);
+
+	// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
+	aim_frame_time += s_time;
+	SENSOR_DATA pano_sd, aim_sd;
+	GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
+
+	cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
+			<< " roll : " << aim_sd.gamma << endl;
+
+	// パノラマの時間を取得
+	ifs_time.close();
+	ifs_time.open(str_pano.c_str());
+	if (!ifs_time.is_open()) {
+		cerr << "cannnot open TIME file : " << str_time << endl;
+		return -1;
+	}
+
+	ifs_time >> time_buf;
+	ifs_time >> time_buf;
+	ifs_time >> time_buf;
+	ifs_time >> s_time; // msec
+
+	s_time /= 1000.0;
+	cout << "s_time : " << s_time << endl;
+
+	// センサデータを一括読み込み
+	LoadSensorData(argv[9], &sensor);
+
+	// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
+	pano_frame_time += s_time;
+
+	GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
+
+	cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
+			<< " roll : " << aim_sd.gamma << endl;
+*/
+	// GCの内部の逆
+	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
+	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
+	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
+	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+
+	// AQの内部の逆
+	//A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
+	//A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
+	//A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
+	//A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
+
+	Mat inv_a1 = A1Matrix.inv();
+	A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
+	A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
+	A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	A2Matrix.at<double> (1, 2) = PANO_H / 2;
+
+	//SetRollRotationMatrix(&roll, aim_sd.gamma);
+	//SetPitchRotationMatrix(&pitch, aim_sd.beta);
+	//SetYawRotationMatrix(&yaw, aim_sd.alpha);
+
 	// パノラマ画像と合成したいフレームの特徴点抽出と記述
 	cout << "calc features" << endl;
 	cvtColor(aim_frame, gray_img1, CV_RGB2GRAY);
@@ -455,9 +617,10 @@ int main(int argc, char** argv) {
 	long detect_frame_num;
 	aria1 = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0));
 	aria2 = Mat(Size(PANO_W, PANO_H), CV_8U, Scalar::all(0));
+
 	while (1) {
 		//		frame_num = node["frame"];
-		for (; n < frame_cap.get(CV_CAP_PROP_FRAME_COUNT); n++) {
+		for (; n < pano_cap.get(CV_CAP_PROP_FRAME_COUNT); n++) {
 			ss << "homo_" << n;
 			read(node[ss.str()], tmp_base);
 			if (!tmp_base.empty())
@@ -495,11 +658,17 @@ int main(int argc, char** argv) {
 		sum = 0;
 
 	}
+	//free(sensor);
+
 	cout << "detected near frame : " << detect_frame_num << endl;
 	cout << max << endl;
 	//　重なりが大きいフレームを取り出す
 	pano_cap.set(CV_CAP_PROP_POS_FRAMES, detect_frame_num);
 	pano_cap >> near_frame;
+	if (near_frame.empty()) {
+		cerr << "cannot detect near frame" << endl;
+		return -1;
+	}
 	cvtColor(near_frame, gray_img2, CV_RGB2GRAY);
 	feature->operator ()(gray_img2, Mat(), objectKeypoints, objectDescriptors);
 	good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
@@ -542,7 +711,6 @@ int main(int argc, char** argv) {
 	 waitKey(30);
 	 */
 
-
 	bitwise_and(mask, pano_black, mask);
 	imshow("panoblack", transform_image2);
 	waitKey(30);
@@ -551,7 +719,7 @@ int main(int argc, char** argv) {
 
 	namedWindow("result", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	imshow("result", transform_image2);
-	waitKey(0);
+	waitKey(30);
 	imwrite("result.jpg", transform_image2);
 
 	return 0;
