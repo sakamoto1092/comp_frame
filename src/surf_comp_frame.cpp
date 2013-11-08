@@ -237,14 +237,15 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
 				Point2f> *pt1, vector<Point2f> *pt2) {
 
-	FlannBasedMatcher matcher;
+	//FlannBasedMatcher matcher;
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
-	int knn = 10;
+	int knn = 1;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
-	//matcher.match(objectDescriptors, imageDescriptors, matches);
+	BFMatcher matcher(cv::NORM_L2,true);
+	matcher.match(descriptors1, descriptors2, tmp_matches);
 
-
+/*
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	tmp_matches.clear();
@@ -265,7 +266,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 				break;
 		}
 	}
-
+*/
 	cout << "matches : " << tmp_matches.size() << endl;
 	double min_dist = DBL_MAX;
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
@@ -284,7 +285,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist +0.1)) {
+					< (min_dist) * 3) {
 				//&&	fabs(((*key1)[tmp_matches[i].queryIdx]).pt.y - ((*key2)[tmp_matches[i].trainIdx]).pt.y) < 100){
 				/// fabs((*key1)[tmp_matches[i].queryIdx].pt.x - 	(*key2)[tmp_matches[i].trainIdx].pt.x) < 0.1) {
 
@@ -344,7 +345,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 5);
+		feature->set("hessianThreshold", 50);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -406,12 +407,12 @@ int main(int argc, char** argv) {
 
 	// 合成フレームを含む動画ファイルをオープン
 	/*frame_cap.open(str_aim_video);
-	if (!frame_cap.isOpened()) {
-		cerr << "cannnot open frame movie" << endl;
-		return -1;
-	}
-	*/
-	aim_frame = imread(argv[1], CV_LOAD_IMAGE_COLOR);  // 直接合成フレームを指定する場合argv[1]に画像pathを指定する
+	 if (!frame_cap.isOpened()) {
+	 cerr << "cannnot open frame movie" << endl;
+	 return -1;
+	 }
+	 */
+	aim_frame = imread(argv[1], CV_LOAD_IMAGE_COLOR); // 直接合成フレームを指定する場合argv[1]に画像pathを指定する
 
 	// パノラマ背景の元動画をオープン
 	pano_cap.open(str_pano_video);
@@ -424,19 +425,18 @@ int main(int argc, char** argv) {
 	mask = imread("mask.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 	cout << "load background mask image" << endl;
 
-
 	cout << "load target frame image" << endl;
-/*
-	// 合成フレームの位置時間を計算し，画像を取得
-	double aim_frame_time= (((double)n_aim_frame / (double)TARGET_VIDEO_FPS) + (double)offset_sec) * 1000.0;
-	if(frame_cap.set(CV_CAP_PROP_POS_FRAMES, aim_frame_time)){
-		cout << "Success !!" << endl;
-	}
-	cout << "target frame time : " << aim_frame_time << " [msec]" << endl;
-	frame_cap >> aim_frame;
-*/
-	if(aim_frame.empty()){
-		cerr << "cannnot load target frame"<<endl;
+	/*
+	 // 合成フレームの位置時間を計算し，画像を取得
+	 double aim_frame_time= (((double)n_aim_frame / (double)TARGET_VIDEO_FPS) + (double)offset_sec) * 1000.0;
+	 if(frame_cap.set(CV_CAP_PROP_POS_FRAMES, aim_frame_time)){
+	 cout << "Success !!" << endl;
+	 }
+	 cout << "target frame time : " << aim_frame_time << " [msec]" << endl;
+	 frame_cap >> aim_frame;
+	 */
+	if (aim_frame.empty()) {
+		cerr << "cannnot load target frame" << endl;
 	}
 
 	//imshow("aim_frame",aim_frame);
@@ -493,62 +493,62 @@ int main(int argc, char** argv) {
 
 	// 合成したいフレームのORIからパノラマ平面へのホモグラフィを計算し重なり具合を計算
 	/*string str_time(argv[6]);
-	string time_buf;
-	ifstream ifs_time(str_time.c_str());
-	double s_time;
+	 string time_buf;
+	 ifstream ifs_time(str_time.c_str());
+	 double s_time;
 
-	if (!ifs_time.is_open()) {
-		cerr << "cannnot open TIME file : " << str_time << endl;
-		return -1;
-	}
+	 if (!ifs_time.is_open()) {
+	 cerr << "cannnot open TIME file : " << str_time << endl;
+	 return -1;
+	 }
 
-	ifs_time >> time_buf;
-	ifs_time >> time_buf;
-	ifs_time >> time_buf;
-	ifs_time >> s_time; // msec
+	 ifs_time >> time_buf;
+	 ifs_time >> time_buf;
+	 ifs_time >> time_buf;
+	 ifs_time >> s_time; // msec
 
-	s_time /= 1000.0;
-	cout << "s_time : " << s_time << endl;
-	SENSOR_DATA *sensor = (SENSOR_DATA *) malloc(sizeof(SENSOR_DATA) * 5000);
+	 s_time /= 1000.0;
+	 cout << "s_time : " << s_time << endl;
+	 SENSOR_DATA *sensor = (SENSOR_DATA *) malloc(sizeof(SENSOR_DATA) * 5000);
 
-	// 対象フレームのセンサデータを一括読み込み
-	LoadSensorData(argv[7], &sensor);
+	 // 対象フレームのセンサデータを一括読み込み
+	 LoadSensorData(argv[7], &sensor);
 
-	// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
-	aim_frame_time += s_time;
-	SENSOR_DATA pano_sd, aim_sd;
-	GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
+	 // 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
+	 aim_frame_time += s_time;
+	 SENSOR_DATA pano_sd, aim_sd;
+	 GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
 
-	cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
-			<< " roll : " << aim_sd.gamma << endl;
+	 cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
+	 << " roll : " << aim_sd.gamma << endl;
 
-	// パノラマの時間を取得
-	ifs_time.close();
-	ifs_time.open(str_pano.c_str());
-	if (!ifs_time.is_open()) {
-		cerr << "cannnot open TIME file : " << str_time << endl;
-		return -1;
-	}
+	 // パノラマの時間を取得
+	 ifs_time.close();
+	 ifs_time.open(str_pano.c_str());
+	 if (!ifs_time.is_open()) {
+	 cerr << "cannnot open TIME file : " << str_time << endl;
+	 return -1;
+	 }
 
-	ifs_time >> time_buf;
-	ifs_time >> time_buf;
-	ifs_time >> time_buf;
-	ifs_time >> s_time; // msec
+	 ifs_time >> time_buf;
+	 ifs_time >> time_buf;
+	 ifs_time >> time_buf;
+	 ifs_time >> s_time; // msec
 
-	s_time /= 1000.0;
-	cout << "s_time : " << s_time << endl;
+	 s_time /= 1000.0;
+	 cout << "s_time : " << s_time << endl;
 
-	// センサデータを一括読み込み
-	LoadSensorData(argv[9], &sensor);
+	 // センサデータを一括読み込み
+	 LoadSensorData(argv[9], &sensor);
 
-	// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
-	pano_frame_time += s_time;
+	 // 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
+	 pano_frame_time += s_time;
 
-	GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
+	 GetSensorDataForTime(aim_frame_time, &sensor, &aim_sd);
 
-	cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
-			<< " roll : " << aim_sd.gamma << endl;
-*/
+	 cout << "yaw : " << aim_sd.alpha << " pitch : " << aim_sd.beta
+	 << " roll : " << aim_sd.gamma << endl;
+	 */
 	// GCの内部の逆
 	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
 	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
@@ -579,9 +579,6 @@ int main(int argc, char** argv) {
 	feature->operator ()(gray_img1, Mat(), imageKeypoints, imageDescriptors);
 	feature->operator ()(gray_img2, mask2, objectKeypoints, objectDescriptors);
 
-	//cout << imageDescriptors << " " << objectDescriptors << endl;
-	cout << imageKeypoints[1].pt << " " << objectKeypoints[1].pt << endl;
-
 	//良い対応点の組みを求める
 	good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
 			&objectKeypoints, &matches, &pt1, &pt2);
@@ -610,7 +607,7 @@ int main(int argc, char** argv) {
 	Mat h_base;
 	Mat tmp_base;
 	stringstream ss;
-	long n = 1;
+	long n = 0;
 	Mat aria1, aria2;
 	Mat v1, v2;
 	long max = LONG_MIN;
@@ -620,48 +617,58 @@ int main(int argc, char** argv) {
 
 	while (1) {
 		//		frame_num = node["frame"];
-		for (; n < pano_cap.get(CV_CAP_PROP_FRAME_COUNT); n++) {
-			ss << "homo_" << n;
-			read(node[ss.str()], tmp_base);
-			if (!tmp_base.empty())
-				break;
-			ss.clear();
-			ss.str("");
-		}
+		n++;
+		ss << "homo_" << n;
+		read(node[ss.str()], tmp_base);
+		ss.clear();
+		ss.str("");
+		if (tmp_base.empty() && n < pano_cap.get(CV_CAP_PROP_FRAME_COUNT))
+			continue;
 
 		//ここに来たときtmp_baseに取得した行列，nにフレーム番号が格納されている
 		// tmp_baseが空なら取り出し終わっているので下でブレイク処理に入る
 
 
-		if (tmp_base.empty())
+		cout << n << " >= " << pano_cap.get(CV_CAP_PROP_FRAME_COUNT) << endl;
+		if (n >= pano_cap.get(CV_CAP_PROP_FRAME_COUNT))
 			break;
+
 		warpPerspective(white_img, aria1, homography, Size(PANO_W, PANO_H),
-				CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+		 CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
-		warpPerspective(white_img, aria2, tmp_base, Size(PANO_W, PANO_H),
-				CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
-		bitwise_and(aria1, aria2, aria1);
-		namedWindow("mask", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-		imshow("mask", aria1);
+		 warpPerspective(white_img, aria2, tmp_base, Size(PANO_W, PANO_H),
+		 CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+		 bitwise_and(aria1, aria2, aria1);
+		 namedWindow("mask", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+		 imshow("mask", aria1);
 
-		threshold(aria1, aria2, 128, 1, THRESH_BINARY);
+		 threshold(aria1, aria2, 128, 1, THRESH_BINARY);
 
-		long sum;
-		sum = 0;
-		for (unsigned long i = 0; i < aria2.rows * aria2.cols; i++)
-			sum += aria2.data[i];
-		if (sum > max) {
-			max = sum;
-			h_base = tmp_base.clone();
+		 long sum;
+		 sum = 0;
+		 for (unsigned long i = 0; i < aria2.rows * aria2.cols; i++)
+		 sum += aria2.data[i];
+		 if (sum > max) {
+		 max = sum;
+		 h_base = tmp_base.clone();
+		 detect_frame_num = n;
+		 }
+		 sum = 0;
+/*
+		double homo_norm, min_norm = DBL_MAX;
+		homo_norm = norm(homography - tmp_base);
+		if (homo_norm < min_norm) {
+			min_norm = homo_norm;
 			detect_frame_num = n;
+			h_base = tmp_base.clone();
 		}
-		sum = 0;
-
+		//tmp_base.release();
+*/
 	}
 	//free(sensor);
 
 	cout << "detected near frame : " << detect_frame_num << endl;
-	cout << max << endl;
+	//cout << max << endl;
 	//　重なりが大きいフレームを取り出す
 	pano_cap.set(CV_CAP_PROP_POS_FRAMES, detect_frame_num);
 	pano_cap >> near_frame;
